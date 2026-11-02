@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZTAC – Zero-Trust PC File Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ============ SIGN-IN ============ -->
+<main id="auth" class="auth">
+  <section class="auth-hero">
+    <div class="brand"><svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><path d="M16 3 5 7v8c0 7 4.7 12 11 14 6.3-2 11-7 11-14V7z" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="m11 16 4 4 7-8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>ZTAC</span></div>
+    <h1>Never <span class="hero-trust">Trust</span>, Always <span class="hero-verify">Verify</span></h1>
+    <div class="dial" id="heroDial" aria-hidden="true"></div>
+  </section>
+
+  <section class="auth-card" aria-live="polite">
+    <div class="tabs" id="authTabs" role="tablist">
+      <button class="tab on" data-tab="login" role="tab">Sign in</button>
+      <button class="tab" data-tab="register" role="tab">Create account</button>
+      <span class="tab-ink"></span>
+    </div>
+
+    <form id="loginForm" class="pane on" autocomplete="on">
+      <label>Username<input name="username" required autocomplete="username"></label>
+      <label>Password<input name="password" type="password" required autocomplete="current-password"></label>
+      <button class="btn primary" type="submit">Continue to verification</button>
+    </form>
+
+    <form id="registerForm" class="pane" autocomplete="off">
+      <label>Username<input name="username" required minlength="3" maxlength="24"></label>
+      <label>Password<input name="password" type="password" required minlength="8"><small>8+ characters, with a letter and a number</small></label>
+      <label>Mobile number<input name="mobile" type="tel" placeholder="+919876543210" required><small>We send your one-time codes here</small></label>
+      <button class="btn primary" type="submit">Create account</button>
+      <p class="note">New accounts start with a trust of 0.10 and earn more through normal use.</p>
+    </form>
+
+    <form id="otpForm" class="pane">
+      <h2>Enter your code</h2>
+      <p class="note" id="otpInfo"></p>
+      <div class="otp" id="otpBoxes"></div>
+      <div class="otp-meta"><span id="otpTimer"></span><button type="button" class="link" id="resendBtn">Send a new code</button></div>
+      <button class="btn primary" type="submit">Verify and sign in</button>
+      <button class="link" type="button" id="otpBack">Back to sign in</button>
+    </form>
+  </section>
+</main>
+
+<!-- ============ CONSOLE ============ -->
+<div id="app" class="app" hidden>
+  <header class="top">
+    <div class="brand sm"><svg viewBox="0 0 32 32" width="22" height="22"><path d="M16 3 5 7v8c0 7 4.7 12 11 14 6.3-2 11-7 11-14V7z" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="m11 16 4 4 7-8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg><span>ZTAC</span></div>
+    <nav id="nav">
+      <button data-view="overview" class="on">Overview</button>
+      <button data-view="files">PC files</button>
+      <button data-view="resources">Resources</button>
+      <button data-view="activity">Activity</button>
+      <button data-view="admin" id="adminNav" hidden>Admin</button>
+    </nav>
+    <div class="who"><span id="stateBadge" class="badge normal">NORMAL</span><span id="whoName"></span><button class="btn ghost" id="logoutBtn">Sign out</button></div>
+  </header>
+
+  <main class="views">
+    <!-- Overview -->
+    <section id="v-overview" class="view on">
+      <div class="grid-ov">
+        <div class="panel hero-panel">
+          <div class="dial" id="mainDial"></div>
+          <div class="hero-copy">
+            <h2 id="trustHeadline">Trust</h2>
+            <p id="trustSub" class="muted"></p>
+            <div class="legend"><span><i class="sw trust"></i>Your trust</span><span><i class="sw notch"></i>Threshold of the resource you last tried</span></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Session</h3>
+          <div class="ring-wrap"><svg viewBox="0 0 100 100" class="ring"><circle cx="50" cy="50" r="42" class="ring-bg"/><circle cx="50" cy="50" r="42" class="ring-fg" id="idleRing" pathLength="100"/></svg><div class="ring-txt"><b id="idleLeft">--</b><small>until idle sign-out</small></div></div>
+          <p class="muted sm" id="sessInfo"></p>
+        </div>
+        <div class="panel">
+          <h3>Account state</h3>
+          <div class="steps" id="stateSteps"></div>
+          <p class="muted sm" id="stateMsg"></p>
+        </div>
+        <div class="panel wide">
+          <h3>Trust over your recent requests</h3>
+          <svg id="spark" viewBox="0 0 600 140" preserveAspectRatio="none"></svg>
+          <p class="muted sm" id="sparkNote"></p>
+        </div>
+      </div>
+      <p class="monitoring-note"><span class="live-dot"></span> Session monitoring is active. Trust is reassessed after every access request.</p>
+    </section>
+
+    <!-- User-selected local PC folder manager -->
+    <section id="v-files" class="view">
+      <div class="head-row">
+        <div><h2>PC File Manager</h2><p class="muted">Select a folder on this PC to view and manage its files. Access is checked against your current trust score.</p></div>
+        <span class="storage-label">LOCAL DEVICE FILES</span>
+      </div>
+      <section class="panel device-panel">
+        <div class="head-row device-head">
+          <div>
+            <h3>Manage files on this device</h3>
+            <p class="muted sm">Choose a folder to view its files. You can edit text files or delete files from the selected folder. The browser asks you to grant folder access.</p>
+          </div>
+          <div class="device-controls">
+            <span id="deviceTrust" class="badge normal">Trust --</span>
+            <button class="btn ghost" id="selectDeviceFolder" type="button">Choose device folder</button>
+            <button class="btn ghost small" id="deviceUpFolder" type="button" disabled>Parent folder</button>
+            <button class="btn ghost small" id="refreshDeviceFiles" type="button" disabled>Refresh</button>
+          </div>
+        </div>
+        <p class="muted sm device-policy" id="devicePolicy">Low trust: no viewing. Medium trust: view and edit when each threshold is met. High trust: view, edit, and delete.</p>
+        <p class="muted sm" id="deviceFolderInfo">No device folder selected. Folder access is granted by you in the browser.</p>
+        <div class="scroll">
+          <table>
+            <thead><tr><th>Name</th><th>Size</th><th>Modified</th><th>Actions</th></tr></thead>
+            <tbody id="deviceFileRows"><tr><td colspan="4" class="empty">Choose a device folder to get started.</td></tr></tbody>
+          </table>
+        </div>
+        <div class="device-preview" id="devicePreview" hidden>
+          <div class="head-row device-preview-head">
+            <div><h3 id="devicePreviewTitle"></h3><p class="muted sm" id="devicePreviewInfo"></p></div>
+            <div class="device-controls">
+              <button class="btn ghost small" id="deviceSave" type="button" hidden>Save changes</button>
+              <button class="btn ghost small" id="deviceCancelEdit" type="button" hidden>Cancel edit</button>
+              <button class="btn ghost small" id="deviceClosePreview" type="button">Close</button>
+            </div>
+          </div>
+          <div id="devicePreviewContent"></div>
+          <textarea id="deviceEditor" class="device-editor" aria-label="Edit text file" hidden></textarea>
+        </div>
+      </section>
+      <details class="server-storage" id="serverStorage">
+        <summary>Optional: files uploaded to the ZTAC app server</summary>
+        <p class="muted sm">This separate feature copies selected files into app-managed storage. It is not needed to manage files in your PC folder.</p>
+        <div class="file-grid">
+          <form id="uploadForm" class="panel upload-panel">
+            <div class="file-icon" aria-hidden="true">↑</div>
+            <h3>Upload a copy</h3>
+            <p class="muted sm">Maximum 25 MB per file. Uploads require the storage write trust threshold.</p>
+            <label class="file-picker">Choose a file<input id="fileInput" type="file" required></label>
+            <button class="btn primary" type="submit" id="uploadBtn">Upload to app storage</button>
+            <p class="muted sm" id="fileAccessNote">App storage is separate from files on this PC.</p>
+          </form>
+          <div class="panel file-list-panel">
+            <div class="head-row file-head"><div><h3>App-stored files</h3><p class="muted sm" id="fileCount">Open this section to check app storage.</p></div><button class="btn ghost small" id="refreshFiles" type="button">Refresh</button></div>
+            <div class="scroll"><table><thead><tr><th>Name</th><th>Size</th><th>Added</th><th></th></tr></thead><tbody id="fileRows"><tr><td colspan="4" class="empty">Open this section to check app storage.</td></tr></tbody></table></div>
+          </div>
+        </div>
+      </details>
+      <p class="storage-disclaimer">PC File Manager works directly with the folder you select in your browser. It does not upload local folder contents to cloud or app storage unless you separately choose the optional upload feature.</p>
+    </section>
+
+    <!-- Resources -->
+    <section id="v-resources" class="view">
+      <div class="head-row"><div><h2>Protected resources</h2><p class="muted">Each demo action needs a minimum trust. Local PC folder operations are checked separately against their file access policies.</p></div>
+        <button class="btn danger" id="attackBtn">Run attacker simulation</button></div>
+      <div class="cards" id="resCards"></div>
+    </section>
+
+    <!-- Activity -->
+    <section id="v-activity" class="view">
+      <h2>Your activity</h2>
+      <div class="panel scroll"><table><thead><tr><th>Time</th><th>Action</th><th>Decision</th><th>Why</th><th>Unusual</th><th>Trust after</th></tr></thead><tbody id="actRows"></tbody></table></div>
+      <h3 class="mt">Your sign-ins</h3>
+      <div class="panel scroll"><table><thead><tr><th>Started</th><th>Status</th><th>Reason</th><th>IP</th></tr></thead><tbody id="sessRows"></tbody></table></div>
+    </section>
+
+    <!-- Admin -->
+    <section id="v-admin" class="view">
+      <div class="tiles" id="adminTiles"></div>
+      <div class="grid-admin">
+        <div class="panel scroll"><h3>Accounts</h3><table><thead><tr><th>User</th><th>Trust</th><th>State</th><th></th></tr></thead><tbody id="userRows"></tbody></table></div>
+        <div class="panel scroll"><h3>Open alerts</h3><div id="alertList"></div></div>
+        <div class="panel scroll"><h3>Active sessions</h3><table><thead><tr><th>User</th><th>Started</th><th>IP</th><th></th></tr></thead><tbody id="activeRows"></tbody></table></div>
+        <div class="panel scroll"><h3>Trust thresholds</h3><div id="polList"></div></div>
+      </div>
+      <div class="panel scroll mt"><div class="head-row"><h3>Audit log</h3><div><span id="chainBadge" class="badge normal">chain not checked</span> <button class="btn ghost" id="auditBtn">Verify and refresh</button></div></div>
+        <table><thead><tr><th>#</th><th>Time</th><th>Event</th><th>User</th><th>Detail</th></tr></thead><tbody id="auditRows"></tbody></table></div>
+    </section>
+  </main>
+</div>
+
+<div id="toasts" aria-live="polite"></div>
+<div id="sms" class="sms" hidden><div class="sms-head">Messages <small>now</small></div><b>ZTAC</b><p id="smsText"></p></div>
+<div id="modal" class="modal" hidden><div class="modal-card"><h2 id="mTitle"></h2><p id="mText"></p><button class="btn primary" id="mBtn">Back to sign in</button></div></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
